@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/event_management';
+const MONGODB_URI = process.env.MONGODB_URI;
 
 let cached = global.mongoose;
 
@@ -9,13 +9,42 @@ if (!cached) {
 }
 
 async function connectDB() {
-  if (cached.conn) return cached.conn;
-
-  if (!cached.promise) {
-    cached.promise = mongoose.connect(MONGODB_URI).then((m) => m);
+  if (!MONGODB_URI) {
+    throw new Error('MONGODB_URI environment variable is not set on the server');
   }
 
-  cached.conn = await cached.promise;
+  if (cached.conn && mongoose.connection.readyState === 1) {
+    return cached.conn;
+  }
+
+  if (!cached.promise) {
+    const opts = {
+      bufferCommands: false,
+      serverSelectionTimeoutMS: 15000,
+      socketTimeoutMS: 45000,
+    };
+
+    cached.promise = mongoose
+      .connect(MONGODB_URI, opts)
+      .then((m) => {
+        console.log('MongoDB connected successfully');
+        return m;
+      })
+      .catch((err) => {
+        cached.promise = null;
+        console.error('MongoDB connection error:', err.message);
+        throw err;
+      });
+  }
+
+  try {
+    cached.conn = await cached.promise;
+  } catch (err) {
+    cached.promise = null;
+    cached.conn = null;
+    throw err;
+  }
+
   return cached.conn;
 }
 

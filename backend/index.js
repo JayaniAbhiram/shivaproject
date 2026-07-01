@@ -28,12 +28,26 @@ app.use(
 
 app.use(express.json());
 
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    message: 'Event Management API is running',
+    dbConfigured: Boolean(process.env.MONGODB_URI),
+  });
+});
+
 app.use(async (req, res, next) => {
   try {
     await connectDB();
     next();
   } catch (err) {
-    res.status(500).json({ message: 'Database connection failed' });
+    console.error('DB middleware error:', err.message);
+    res.status(500).json({
+      message: 'Database connection failed',
+      hint: err.message.includes('not set')
+        ? 'Add MONGODB_URI in Vercel → Settings → Environment Variables, then redeploy'
+        : 'Check MongoDB Atlas → Network Access allows 0.0.0.0/0',
+    });
   }
 });
 
@@ -42,9 +56,5 @@ app.use('/api/events', eventRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/analytics', analyticsRoutes);
-
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Event Management API is running' });
-});
 
 module.exports = app;
